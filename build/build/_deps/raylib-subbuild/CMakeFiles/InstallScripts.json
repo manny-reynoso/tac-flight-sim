@@ -1,0 +1,7 @@
+{
+	"InstallScripts" : 
+	[
+		"/home/manny/code/tac-flight-sim/build/build/_deps/raylib-subbuild/cmake_install.cmake"
+	],
+	"Parallel" : false
+}
