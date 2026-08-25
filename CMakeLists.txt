@@ -19,12 +19,12 @@ FetchContent_MakeAvailable(raylib)
 
 # Create the executable before configuring it
 add_executable(
-    tac-sim-flight
+    tac-flight-sim
     src/main.cpp
 )
 
 target_compile_options(
-    tac-sim-flight
+    tac-flight-sim
     PRIVATE
         -Wall
         -Wextra
