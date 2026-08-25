@@ -15,9 +15,16 @@ int main() {
   camera.projection = CAMERA_PERSPECTIVE; // Camera mode type
 
   Vector3 origin = {0.0f, 0.0f, 0.0f}; // marks origin of 3d scene
-  SetTargetFPS(60);                    // Sets Target Frames per second
+
+  DisableCursor();  // Limits cursor relative to movement inside the window
+  SetTargetFPS(60); // Sets Target Frames per second
 
   while (!WindowShouldClose()) {
+
+    UpdateCamera(&camera, CAMERA_FREE);
+
+    if (IsKeyPressed(KEY_Z))
+      camera.target = (Vector3){origin};
     BeginDrawing();
 
     ClearBackground(WHITE);
