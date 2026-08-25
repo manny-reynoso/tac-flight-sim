@@ -34,7 +34,7 @@ target_compile_options(
 )
 
 target_link_libraries(
-    tac-sim-flight
+    tac-flight-sim
     PRIVATE
         raylib
 )
