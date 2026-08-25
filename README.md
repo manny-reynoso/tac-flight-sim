@@ -1,8 +1,8 @@
-# Aerospace-Simulator
+# tac-flight-sim
 
 
 
-build and run the project
+# build and run the project
 
 cmake -B build
 cmake --build build
