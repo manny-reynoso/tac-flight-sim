@@ -16,11 +16,15 @@ made — see CLAUDE.md for phase/roadmap context and team-role workflow.
   default.
 - **Warnings:** `-Wall -Wextra -Wpedantic -Wshadow -Wnon-virtual-dtor` on the
   main target from commit one.
-- **Naming — unresolved:** the CMake `project()` name is `tac-sim-flight`,
-  but the repo, executable target, and README all use `tac-flight-sim`. This
-  split was flagged during TICKET-001 review and intentionally left as the
-  developer's call rather than decided by an agent. Worth resolving before
-  it's threaded through more of the tree in later phases.
+- **Naming — resolved:** the CMake `project()` name was `tac-sim-flight`
+  while the repo, executable target, and README used `tac-flight-sim`.
+  Flagged during TICKET-001 review; `project()` now also uses
+  `tac-flight-sim`, so all four are consistent.
+- **`CMAKE_BUILD_TYPE`:** defaults to `RelWithDebInfo` via a guard right
+  after `project()` (before `FetchContent_MakeAvailable`), so raylib and the
+  app both build with debug symbols instead of silently unset flags. Fixes
+  a warning architect traced to raylib's own fallback setting the build type
+  to an empty string, not a usable default.
 - **`build/` is gitignored**, not committed. It was accidentally tracked for
   two early commits and later untracked (`git rm -r --cached build/`) —
   noted here so it doesn't happen again after a future `git add -A`.
