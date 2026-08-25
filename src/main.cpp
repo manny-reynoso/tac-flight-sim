@@ -10,7 +10,7 @@ int main() {
   Camera3D camera = {0};
   camera.position = (Vector3){0.0f, 10.0f, 10.0f}; // camera postion
   camera.target = (Vector3){0.0f, 0.0f, 0.0f};     // Camera looks at point
-  camera.up = (Vector3){0.0f, 0.0f, 0.0f};
+  camera.up = (Vector3){0.0f, 1.0f, 0.0f};
   camera.fovy = 45.0f;                    // Camera FOV Y tac-flight-sim
   camera.projection = CAMERA_PERSPECTIVE; // Camera mode type
 
