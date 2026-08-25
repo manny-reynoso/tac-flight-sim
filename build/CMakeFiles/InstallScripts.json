@@ -1,0 +1,11 @@
+{
+	"InstallScripts" : 
+	[
+		"/home/manny/code/tac-flight-sim/build/cmake_install.cmake",
+		"/home/manny/code/tac-flight-sim/build/_deps/raylib-build/cmake_install.cmake",
+		"/home/manny/code/tac-flight-sim/build/_deps/raylib-build/raylib/cmake_install.cmake",
+		"/home/manny/code/tac-flight-sim/build/_deps/raylib-build/raylib/external/glfw/cmake_install.cmake",
+		"/home/manny/code/tac-flight-sim/build/_deps/raylib-build/raylib/external/glfw/src/cmake_install.cmake"
+	],
+	"Parallel" : false
+}
