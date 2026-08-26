@@ -14,7 +14,8 @@ int main() {
   camera.fovy = 45.0f;                    // Camera FOV Y tac-flight-sim
   camera.projection = CAMERA_PERSPECTIVE; // Camera mode type
 
-  Vector3 origin = {0.0f, 0.0f, 0.0f}; // marks origin of 3d scene
+  Vector3 origin = {0.0f, 0.0f, 0.0f};  // marks origin of 3d scene
+  Vector3 cubePos = {0.0f, 2.5f, 0.0f}; // Position coordinates for Cube
 
   DisableCursor();  // Limits cursor relative to movement inside the window
   SetTargetFPS(60); // Sets Target Frames per second
@@ -24,14 +25,14 @@ int main() {
     UpdateCamera(&camera, CAMERA_FREE);
 
     if (IsKeyPressed(KEY_Z))
-      camera.target = (Vector3){origin};
+      camera.target = origin;
     BeginDrawing();
 
     ClearBackground(WHITE);
 
     BeginMode3D(camera);
     DrawGrid(25, 1.0f);
-    DrawCube(origin, 5.0f, 5.0f, 5.0f, RED);
+    DrawCube(cubePos, 5.0f, 5.0f, 5.0f, RED);
 
     EndMode3D();
 
