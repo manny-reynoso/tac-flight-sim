@@ -124,7 +124,11 @@ three review passes.
 
 ## TICKET-003 — Load and render a single static model (.glb)
 
-**Status:** Open
+**Status:** Closed (verified — clean build from scratch ran end-to-end;
+normal run loads model + texture with zero warnings; deliberate path-break
+test performed by renaming race.glb, confirmed a clear `ERROR: Model did not
+load...` log, clean resource unload, and clean window close with no crash,
+then reverted).
 
 **Phase:** 1 — Raylib fundamentals
 
@@ -198,3 +202,30 @@ owned per-frame-updated entity shows up).
   force the architect conversation before starting that ticket rather than
   parking it again — by then the file will have window setup, camera,
   ground plane, cube, and a loaded model in it.
+
+**Review history:** rendering-mentor found and confirmed fixed an inverted
+`meshCount` validation condition (was logging on success, not failure), a
+missing exit in the failure branch (now logs via `TraceLog(LOG_ERROR)`,
+calls `CloseWindow()`, then returns — nothing downstream reachable), and a
+missing `DrawModel` call entirely (model was loaded/unloaded but never
+drawn). Separately, a real rendering bug was debugged: the model rendered
+solid white instead of its texture. Root cause, confirmed against raylib's
+console output and glTF-loading source: the `.glb`'s material references an
+external texture file by relative path rather than embedding it (despite
+being `.glb` format), and that path resolves relative to the model file's
+own directory. The texture was first in the wrong directory
+(`assets/textures/` instead of `assets/models/Textures/`), then a
+case-sensitivity mismatch (`textures` vs. required `Textures`) was found and
+fixed — confirmed via console output showing the texture loading as a real
+512x512 texture instead of the 1x1 default fallback. pm's scope check then
+found `assets/textures/` (the repo-root convention directory, distinct from
+`assets/models/Textures/`) was missing entirely — created with a `.gitkeep`.
+Final closure required three live checks, none of which had been done
+despite prior static reviews: a clean build from scratch, a normal run
+confirming zero warnings, and the ticket's explicit deliberate-path-break
+test (renamed `race.glb`, confirmed a clean `ERROR` + resource unload +
+window close with no crash, then reverted).
+
+**Note:** `assets/models/race-future.glb` exists in the repo but is never
+loaded by any code — flagged by pm as dead weight, not scope creep. Worth a
+conscious call later (keep as a future placeholder candidate, or delete).
