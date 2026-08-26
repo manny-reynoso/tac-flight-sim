@@ -63,7 +63,9 @@ static read.
 
 ## TICKET-002 — 3D scene with Camera3D, ground plane, and placeholder cube
 
-**Status:** Open (drafted, not started)
+**Status:** Closed (verified — clean build ran end-to-end, window opened,
+closed cleanly on both close-button and Esc; scene renders with the camera
+moving/orbiting via CAMERA_FREE and the cube visibly resting on the grid).
 
 **Phase:** 1 — Raylib fundamentals
 
@@ -92,12 +94,30 @@ multiple objects/textures/materials.
 - `main.cpp` stays a single file.
 
 **Open questions (flagged by pm, not decided):**
-- Camera mode choice (`CAMERA_ORBITAL` vs `CAMERA_FREE` vs
-  `CAMERA_THIRD_PERSON`) — small decision, but worth a rendering-mentor
-  sanity check if thinking ahead to the Phase 2+ aircraft-follow camera.
+- Camera mode choice — resolved by shipping `CAMERA_FREE` (mouse-look
+  fly-cam + WASD/space/ctrl, `DisableCursor()` paired correctly). Revisit if
+  an aircraft-follow camera design comes up in Phase 2+ — architect call.
 - When flat `main.cpp` stops being appropriate as more tickets stack on top
-  (model loading, then lighting) — a real architect question for later, not
-  this ticket.
+  (model loading, then lighting) — a real architect question, likely to come
+  up on the very next ticket.
+
+**Review history:** rendering-mentor ran three passes — found and fixed a
+`camera.up` zero-vector bug (would corrupt the view matrix via a
+divide-by-zero in the cross-product normalize), confirmed correct
+single-call-per-frame `UpdateCamera` usage and the `CAMERA_FREE` mode choice,
+confirmed `BeginMode3D`/`EndMode3D` usage and draw-order (`DrawFPS` after
+`EndMode3D`, correct for future HUD-over-3D work) are correct, found and
+fixed a cube-position bug (cube was sunk into the ground plane, now anchored
+at half its height so it rests on the grid), and flagged non-blocking C99
+compound-literal syntax (`(Vector3){...}`) in place of standard C++
+brace-init. Developer fixed all remaining compound-literal instances; pm
+confirmed by static read that all five acceptance criteria pass and scope
+stayed clean (no new files, classes, or later-phase concepts — one small
+unrequested `KEY_Z`-resets-camera-target line noted but not treated as scope
+creep). Final closure confirmed by an actual clean build + run, which also
+surfaced a new non-blocking `-Wextra` "missing initializer" warning on
+`Camera3D camera = {0};` — worth a follow-up cleanup pass, not a blocker.
 
 pm recommended routing this ticket through rendering-mentor *while*
-implementing, not just after.
+implementing, not just after — that recommendation held up well across all
+three review passes.
