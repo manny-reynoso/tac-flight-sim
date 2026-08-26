@@ -121,3 +121,80 @@ surfaced a new non-blocking `-Wextra` "missing initializer" warning on
 pm recommended routing this ticket through rendering-mentor *while*
 implementing, not just after — that recommendation held up well across all
 three review passes.
+
+## TICKET-003 — Load and render a single static model (.glb)
+
+**Status:** Open
+
+**Phase:** 1 — Raylib fundamentals
+
+**Goal:** Get one real first-class model loaded from a file and rendered in
+the existing scene — first reps with raylib's model/mesh pipeline and
+asset-loading lifecycle, before lighting or any aircraft-specific concepts.
+
+**Scope — in:**
+- Add an `assets/models/` directory at repo root (sibling to `src/`, not
+  nested inside it); `assets/textures/` also created now as convention even
+  though this ticket doesn't need it. `assets/shaders/` and `assets/sounds/`
+  are not created yet.
+- Source one placeholder `.glb` model (Blender export or a free pack —
+  Kenney/Sketchfab) and place it under `assets/models/`. Format is `.glb`
+  specifically, not `.obj`/`.mtl` — `.glb` embeds textures, avoiding the
+  external-texture-path failure mode where a missing/misnamed texture
+  reference silently renders the model gray instead of failing loudly.
+- `LoadModel(...)` called after `InitWindow`, `UnloadModel(...)` called
+  before `CloseWindow` — this ordering is a correctness requirement (GPU
+  resource lifetime tied to the context `InitWindow`/`CloseWindow`
+  create/destroy), not a style choice.
+- Load path is relative to the process's working directory (e.g.
+  `"assets/models/x.glb"` run from repo root) — confirm the documented run
+  command in the README still resolves it correctly, since this is a real
+  footgun if run from inside `build/` instead.
+- Minimal inline validation after load: check something like
+  `model.meshCount > 0`; on failure, log a clear message and exit early
+  rather than proceeding to draw. No silent garbage-draw path.
+- Draw the loaded model in the existing scene, either replacing the
+  placeholder cube or alongside it (developer's call at implementation time
+  — not an architecturally significant decision).
+- Stays flat in `main.cpp` — no new source file, no class/struct/RAII
+  wrapper. One model, one call site; that's still true after this ticket.
+- Route through rendering-mentor while implementing (model loading + draw
+  call usage), not just after.
+
+**Scope — out:** Lighting/shaders (next ticket), multiple models,
+animation/animated models, any aircraft-specific concepts (flight axes,
+aircraft-shaped placeholder, HUD), any code abstraction beyond current flat
+`main.cpp` (that question is explicitly deferred to Phase 2, when a real
+owned per-frame-updated entity shows up).
+
+**Acceptance criteria:**
+- Running `./build/tac-flight-sim` from the documented run path (repo root)
+  shows the loaded `.glb` model rendered in the 3D scene alongside the
+  existing ground plane.
+- Model loads and unloads with no crash, no leak-shaped warning, and no
+  validation-check failure on a normal run.
+- Deliberately breaking the model path (rename/move the file) produces a
+  loud, clear failure (log message + early exit) instead of a blank/garbage
+  draw — verified once, then reverted.
+- `assets/models/` (and `assets/textures/`) exist at repo root; README
+  build/run instructions still work unmodified or are updated if the run
+  path assumption changed.
+- `main.cpp` stays a single file; no new classes, structs, or headers
+  introduced.
+- Same build command as TICKET-001/002, no new CMake dependencies (raylib's
+  model loading is already included).
+
+**Open questions (flagged by pm, not decided):**
+- Which specific placeholder model/pack to use is still genuinely open —
+  rendering-mentor suggested Blender export or Kenney/Sketchfab as sources
+  but didn't pick one. Pick anything low-poly and license-clean; it's
+  throwaway and gets replaced by an actual aircraft model well after Phase 1.
+- Cube replaced vs. cube-plus-model is an implementation-time call, not
+  something that needs a decision now.
+- The real "when does `main.cpp` stop being flat" question is explicitly
+  parked again (per architect, second time now) — it lands with Phase 2's
+  owned aircraft entity, not here. **This is the second ticket in a row this
+  has been raised and parked.** If it comes up a third time on TICKET-004,
+  force the architect conversation before starting that ticket rather than
+  parking it again — by then the file will have window setup, camera,
+  ground plane, cube, and a loaded model in it.
