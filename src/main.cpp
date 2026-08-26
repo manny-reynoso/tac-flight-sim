@@ -5,9 +5,21 @@ int main() {
   int screenHeight{720};
   InitWindow(screenWidth, screenHeight, "tac-flight-sim");
 
+  // Load 3D model
+
+  Model model = LoadModel("assets/models/race.glb");
+  if (model.meshCount <= 0) {
+    TraceLog(LOG_ERROR, "Model did not load...");
+    CloseWindow();
+    return 0;
+  }
+
+  // model Position
+  Vector3 modelPos = {5.0f, 0.0f, 0.0f};
+
   // 3D Camera
 
-  Camera3D camera = {0};
+  Camera3D camera = {};
   camera.position = {0.0f, 10.0f, 10.0f}; // camera postion
   camera.target = {0.0f, 0.0f, 0.0f};     // Camera looks at point
   camera.up = {0.0f, 1.0f, 0.0f};
@@ -33,6 +45,7 @@ int main() {
     BeginMode3D(camera);
     DrawGrid(25, 1.0f);
     DrawCube(cubePos, 5.0f, 5.0f, 5.0f, RED);
+    DrawModel(model, modelPos, 5.0f, WHITE);
 
     EndMode3D();
 
@@ -40,6 +53,7 @@ int main() {
     EndDrawing();
   }
 
+  UnloadModel(model);
   CloseWindow();
 
   return 0;
