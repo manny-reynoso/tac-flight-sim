@@ -28,6 +28,17 @@ made — see CLAUDE.md for phase/roadmap context and team-role workflow.
 - **`build/` is gitignored**, not committed. It was accidentally tracked for
   two early commits and later untracked (`git rm -r --cached build/`) —
   noted here so it doesn't happen again after a future `git add -A`.
+- **`main.cpp` structure — resolved on TICKET-004:** whether to stay flat
+  had been explicitly parked twice (after TICKET-002 and TICKET-003).
+  Architect's decision: introduce function-level organization only
+  (`LoadScene`/`UpdateScene`/`DrawScene`/`UnloadScene`), still a single
+  file — no new source files, no classes with behavior. Trigger for this
+  was lighting introducing real cross-resource ordering dependencies
+  (`Model`, `Shader`, `Light[]`, `Camera3D`) and a genuine new per-frame
+  update phase, not file length. The next real structural trigger is
+  Phase 2's first owned, per-frame-updated aircraft entity — that's when a
+  multi-file split or `Scene`/`Renderer` class becomes a live question
+  again, not before.
 
 ## TICKET-001 — Bootstrap project + open a raylib window
 
@@ -229,3 +240,102 @@ window close with no crash, then reverted).
 **Note:** `assets/models/race-future.glb` exists in the repo but is never
 loaded by any code — flagged by pm as dead weight, not scope creep. Worth a
 conscious call later (keep as a future placeholder candidate, or delete).
+
+## TICKET-004 — Basic lighting via shader on the loaded model
+
+**Status:** Open
+
+**Phase:** 1 — Raylib fundamentals (**last ticket in this phase** — see Open
+questions for the Phase 2 planning flag)
+
+**Goal:** Get one real pass with raylib's shader-based lighting pipeline — a
+lit model instead of raylib's default unlit/vertex-color rendering — closing
+out Phase 1's stated goal ("camera, model loading, basic lighting before
+touching real systems"). This ticket also resolves the flat-`main.cpp`
+question parked twice (TICKET-002, TICKET-003): per architect's decision
+(see Decisions log), function-level structure is introduced now, staying in
+one file.
+
+**Scope — in:**
+- Introduce a plain aggregate struct, `SceneAssets` (GPU handle bag, not a
+  domain object — no methods, no behavior), holding `Model model`,
+  `Shader shader`, `Light lights[MAX_LIGHTS]` (or the minimal equivalent).
+- Split `main()`'s body into named functions by lifecycle phase, still
+  inside `main.cpp`:
+  - `SceneAssets LoadScene()`
+  - `void UpdateScene(SceneAssets&, const Camera3D&)`
+  - `void DrawScene(const SceneAssets&, const Camera3D&)`
+  - `void UnloadScene(SceneAssets&)`
+  - `main()` becomes: `InitWindow` → `LoadScene()` → loop
+    `{ UpdateCamera; UpdateScene; Begin/Draw/End }` → `UnloadScene()` →
+    `CloseWindow`.
+- Load a lighting shader and wire it into the already-loaded model's
+  material (`model.materials[0].shader = shader`).
+- Create one, or a small fixed number of, lights (the `rlights.h` pattern —
+  `CreateLight()` returning a `Light` with shader uniform locations already
+  resolved — is the idiomatic raylib approach here, not something to
+  reinvent).
+- New per-frame update step: push camera position and light data into
+  shader uniforms inside `UpdateScene` — a genuinely new UPDATE phase that
+  didn't exist in TICKET-001–003, and the reason function-level ordering
+  matters now (shader must exist before being assigned to the model's
+  material; light uniform locations must be valid before `UpdateScene`
+  writes to them).
+- Fix the still-open `-Wextra` "missing initializer" warning on
+  `Camera3D camera = {};` while camera setup is being touched for this
+  ticket anyway.
+- Still zero new source files, zero classes with behavior — `SceneAssets`
+  is data only.
+
+**Scope — out:** Multiple lights beyond what's needed to demonstrate basic
+lighting is working (one, or a small fixed count, is sufficient — this is
+not a lighting-design exercise); any new files; any class/object beyond the
+plain `SceneAssets` aggregate; a `Scene`/`Renderer` split (explicitly
+Phase 2's job, triggered by the first owned per-frame-updated aircraft
+entity, not by lighting); any aircraft-specific concepts; any
+entity/ownership system; PBR or advanced material work (normal maps, IBL,
+etc.) — this is Phong/basic-lit only.
+
+**Acceptance criteria:**
+- Running `./build/tac-flight-sim` from the documented run path shows the
+  existing `.glb` model visibly shaded by at least one light (a lit
+  surface, not flat/unlit vertex color) — verified visually, and by moving
+  the camera/light to confirm shading actually responds rather than being
+  a baked-in texture effect.
+- `main.cpp` is reorganized into `LoadScene`/`UpdateScene`/`DrawScene`/
+  `UnloadScene` per the structure above; `main()` itself contains no direct
+  GPU resource setup/teardown beyond calling these functions and
+  `InitWindow`/`CloseWindow`.
+- `SceneAssets` is a plain data aggregate — no member functions, no
+  constructors/destructors beyond defaults.
+- Clean build produces zero warnings, including confirmation the
+  `-Wextra` "missing initializer" warning on `Camera3D` is gone.
+- Clean close (Esc/close button), no crash; `UnloadScene` unloads the
+  shader as well as the model (shader lifetime tracked the same way model
+  lifetime was in TICKET-003 — no leak-shaped warning).
+- Still a single file (`main.cpp`); no new headers/source files added.
+
+**Open questions (flagged by pm, not decided):**
+- **Exact shader source is genuinely open.** raylib ships a basic lighting
+  vertex/fragment shader pair (`lighting.vs`/`lighting.fs`) plus
+  `rlights.h` in its own examples repo — is that the expected source to
+  pull in verbatim, or does the developer want to write a minimal shader
+  from scratch as an additional rep? Flag to rendering-mentor while
+  implementing.
+- Exact light count (1 vs. a small fixed number like 2–4) and light type
+  (point vs. directional) is an implementation-time call, not
+  architecturally significant — pick whatever most clearly demonstrates
+  lighting is working.
+- **Phase 2 planning should follow immediately after this ticket closes.**
+  This is the last item in Phase 1's roadmap description. Once TICKET-004
+  is verified closed, the next pm conversation should be scoping the first
+  Phase 2 ticket (MVP loop — one aircraft, empty sky, input/camera), not
+  another Phase 1 item.
+
+**Note:** don't let "route through rendering-mentor while implementing"
+become optional here the way it arguably was for TICKET-002/003 — this
+ticket has more moving parts (shader compilation, uniform wiring, material
+assignment order) and more silent-failure risk (per the architect's
+TICKET-003 white-model parallel) than either of those.
+
+**Review history:** (pending)
