@@ -286,6 +286,16 @@ one file.
   ticket anyway.
 - Still zero new source files, zero classes with behavior — `SceneAssets`
   is data only.
+- **Scope amendment (logged, not a unilateral read):** `src/rlights.h` —
+  an unmodified, vendored copy of raylib's own example helper header
+  (`CreateLight`/`UpdateLightValues`, gated by `#define
+  RLIGHTS_IMPLEMENTATION` in exactly one translation unit, `main.cpp`) — is
+  an explicitly allowed exception to "no new headers/source files added"
+  below. It's third-party vendored code the developer didn't author, not a
+  fragmentation of the project's own logic (which is what that criterion
+  was meant to prevent), but pm flagged the acceptance criterion as
+  literally worded doesn't carve this out on its own — so it's carved out
+  here, explicitly, rather than waved through by a narrow reading.
 
 **Scope — out:** Multiple lights beyond what's needed to demonstrate basic
 lighting is working (one, or a small fixed count, is sufficient — this is
@@ -313,7 +323,9 @@ etc.) — this is Phong/basic-lit only.
 - Clean close (Esc/close button), no crash; `UnloadScene` unloads the
   shader as well as the model (shader lifetime tracked the same way model
   lifetime was in TICKET-003 — no leak-shaped warning).
-- Still a single file (`main.cpp`); no new headers/source files added.
+- Still a single file (`main.cpp`); no new headers/source files added,
+  **except `src/rlights.h`** (vendored, unmodified — see the explicit
+  scope amendment above).
 
 **Open questions (flagged by pm, not decided):**
 - **Exact shader source is genuinely open.** raylib ships a basic lighting
