@@ -1,18 +1,52 @@
 #include <raylib.h>
+#define RLIGHTS_IMPLEMENTATION
+#include "rlights.h"
+
+struct SceneAssets {
+  Model model;
+  Shader shader;
+  Light lights[MAX_LIGHTS];
+};
+
+// Load Scene
+SceneAssets LoadScene() {
+
+  SceneAssets LoadResult{};
+  // Load 3D model
+
+  Model model = LoadModel("assets/models/race.glb");
+  LoadResult.model = model;
+  if (model.meshCount <= 0) {
+    TraceLog(LOG_ERROR, "Model did not load...");
+
+    CloseWindow();
+    return LoadResult;
+  }
+  // Load Shader
+  Shader shader =
+      LoadShader("assets/shaders/lighting.vs", "assets/shaders/lighting.fs");
+  LoadResult.shader = shader;
+  LoadResult.model.materials[0].shader = shader;
+  if (shader.id == 0) {
+    TraceLog(LOG_ERROR, "Shader did not load and model rendered flat instead");
+    CloseWindow();
+    return LoadResult;
+  };
+
+  return LoadResult;
+};
 
 int main() {
   int screenWidth{1280};
   int screenHeight{720};
+
+  // Initialize Window
   InitWindow(screenWidth, screenHeight, "tac-flight-sim");
+  SceneAssets scene = LoadScene();
 
-  // Load 3D model
-
-  Model model = LoadModel("assets/models/race.glb");
-  if (model.meshCount <= 0) {
-    TraceLog(LOG_ERROR, "Model did not load...");
-    CloseWindow();
-    return 0;
-  }
+  void UpdateScene(SceneAssets &, const Camera3D &);
+  void DrawScene(const SceneAssets &, const Camera3D &);
+  void UnloadScene(SceneAssets &);
 
   // model Position
   Vector3 modelPos = {5.0f, 0.0f, 0.0f};
@@ -45,7 +79,7 @@ int main() {
     BeginMode3D(camera);
     DrawGrid(25, 1.0f);
     DrawCube(cubePos, 5.0f, 5.0f, 5.0f, RED);
-    DrawModel(model, modelPos, 5.0f, WHITE);
+    DrawModel(scene.model, modelPos, 5.0f, WHITE);
 
     EndMode3D();
 
@@ -53,7 +87,7 @@ int main() {
     EndDrawing();
   }
 
-  UnloadModel(model);
+  UnloadModel(scene.model);
   CloseWindow();
 
   return 0;
