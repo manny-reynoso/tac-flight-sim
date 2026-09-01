@@ -39,6 +39,15 @@ made — see CLAUDE.md for phase/roadmap context and team-role workflow.
   Phase 2's first owned, per-frame-updated aircraft entity — that's when a
   multi-file split or `Scene`/`Renderer` class becomes a live question
   again, not before.
+- **`LoadScene()` return-value construction — resolved on TICKET-004:**
+  a single `SceneAssets` value is declared once and built up incrementally
+  across the function (model, then shader, then lights), returned early on
+  model-load failure and again — more complete — at the end on success.
+  Architect's call, over constructing two separate `SceneAssets` values (one
+  per branch): the failure and success cases are the same struct at
+  different stages of completion, not two distinct outcomes, so one shared
+  variable avoids duplicating field assignments as `SceneAssets` gains more
+  fields.
 
 ## TICKET-001 — Bootstrap project + open a raylib window
 
