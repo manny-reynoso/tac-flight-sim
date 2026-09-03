@@ -6,6 +6,7 @@ struct SceneAssets {
   Model model;
   Shader shader;
   Light lights[MAX_LIGHTS];
+  int viwPosLoc;
 };
 
 // Load Scene
@@ -33,23 +34,48 @@ SceneAssets LoadScene() {
     return LoadResult;
   };
 
+  // Load lighting
+
+  LoadResult.lights[0] = CreateLight(LIGHT_POINT, {10, 10, -5}, {0, 0, 0},
+                                     YELLOW, LoadResult.shader);
+  int ambientLoc = GetShaderLocation(LoadResult.shader, "ambient");
+  float ambientVal[4] = {0.1f, 0.1f, 0.1f, 0.1f};
+  SetShaderValue(LoadResult.shader, ambientLoc, ambientVal,
+                 SHADER_UNIFORM_VEC4);
+
+  // Load Camera View pos
+
   return LoadResult;
 };
+
+// Draw Scene
+void DrawScene(const SceneAssets &scene, const Camera3D &) {
+
+  Vector3 cubePos = {0.0f, 2.5f, 0.0f}; // Position coordinates for Cube
+
+  // model Position
+  Vector3 modelPos = {5.0f, 0.0f, 0.0f};
+
+  DrawGrid(25, 1.0f);
+  DrawCube(cubePos, 5.0f, 5.0f, 5.0f, RED);
+  DrawModel(scene.model, modelPos, 5.0f, WHITE);
+};
+
+void UpdateScene(SceneAssets &scene, const Camera3D &camera) {
+
+};
+
+void UnloadScene(SceneAssets &);
 
 int main() {
   int screenWidth{1280};
   int screenHeight{720};
 
+  Vector3 origin = {0.0f, 0.0f, 0.0f}; // marks origin of 3d scene
+
   // Initialize Window
   InitWindow(screenWidth, screenHeight, "tac-flight-sim");
   SceneAssets scene = LoadScene();
-
-  void UpdateScene(SceneAssets &, const Camera3D &);
-  void DrawScene(const SceneAssets &, const Camera3D &);
-  void UnloadScene(SceneAssets &);
-
-  // model Position
-  Vector3 modelPos = {5.0f, 0.0f, 0.0f};
 
   // 3D Camera
 
@@ -59,9 +85,6 @@ int main() {
   camera.up = {0.0f, 1.0f, 0.0f};
   camera.fovy = 45.0f;                    // Camera FOV Y tac-flight-sim
   camera.projection = CAMERA_PERSPECTIVE; // Camera mode type
-
-  Vector3 origin = {0.0f, 0.0f, 0.0f};  // marks origin of 3d scene
-  Vector3 cubePos = {0.0f, 2.5f, 0.0f}; // Position coordinates for Cube
 
   DisableCursor();  // Limits cursor relative to movement inside the window
   SetTargetFPS(60); // Sets Target Frames per second
@@ -77,10 +100,8 @@ int main() {
     ClearBackground(WHITE);
 
     BeginMode3D(camera);
-    DrawGrid(25, 1.0f);
-    DrawCube(cubePos, 5.0f, 5.0f, 5.0f, RED);
-    DrawModel(scene.model, modelPos, 5.0f, WHITE);
 
+    DrawScene(scene, camera);
     EndMode3D();
 
     DrawFPS(10, 10);
