@@ -48,6 +48,17 @@ made — see CLAUDE.md for phase/roadmap context and team-role workflow.
   different stages of completion, not two distinct outcomes, so one shared
   variable avoids duplicating field assignments as `SceneAssets` gains more
   fields.
+- **`BeginMode3D`/`EndMode3D` bracket ownership — resolved on TICKET-004:**
+  `main()` keeps the bracket (wrapping the call to `DrawScene`), rather than
+  `DrawScene` owning it internally — both were flagged as defensible by
+  architect, so this was a developer call, not left to default silently.
+  Reasoning: `main()` already owns `DrawFPS`, the only 2D content today, with
+  no wrapping function of its own — keeping `main()` as the thing that opens
+  and closes each drawing region (3D bracket now, a 2D/HUD region later)
+  keeps both regions handled the same way. `DrawScene`'s body is just the
+  draw calls (`DrawGrid`/`DrawCube`/`DrawModel`), not the mode bracket.
+  Revisit if/when 2D/HUD content grows enough to justify its own ownership
+  structure — not before.
 
 ## TICKET-001 — Bootstrap project + open a raylib window
 
