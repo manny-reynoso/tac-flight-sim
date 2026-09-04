@@ -1,12 +1,15 @@
 #include <raylib.h>
 #define RLIGHTS_IMPLEMENTATION
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
 #include "rlights.h"
+#pragma GCC diagnostic pop
 
 struct SceneAssets {
   Model model;
   Shader shader;
   Light lights[MAX_LIGHTS];
-  int viwPosLoc;
+  int viewPosLoc;
 };
 
 // Load Scene
@@ -20,19 +23,18 @@ SceneAssets LoadScene() {
   if (model.meshCount <= 0) {
     TraceLog(LOG_ERROR, "Model did not load...");
 
-    CloseWindow();
     return LoadResult;
   }
   // Load Shader
   Shader shader =
       LoadShader("assets/shaders/lighting.vs", "assets/shaders/lighting.fs");
   LoadResult.shader = shader;
-  LoadResult.model.materials[0].shader = shader;
   if (shader.id == 0) {
     TraceLog(LOG_ERROR, "Shader did not load and model rendered flat instead");
-    CloseWindow();
+
     return LoadResult;
   };
+  LoadResult.model.materials[0].shader = shader;
 
   // Load lighting
 
@@ -42,6 +44,8 @@ SceneAssets LoadScene() {
   float ambientVal[4] = {0.1f, 0.1f, 0.1f, 0.1f};
   SetShaderValue(LoadResult.shader, ambientLoc, ambientVal,
                  SHADER_UNIFORM_VEC4);
+
+  LoadResult.viewPosLoc = GetShaderLocation(shader, "viewPos");
 
   // Load Camera View pos
 
@@ -63,9 +67,15 @@ void DrawScene(const SceneAssets &scene, const Camera3D &) {
 
 void UpdateScene(SceneAssets &scene, const Camera3D &camera) {
 
+  SetShaderValue(scene.shader, scene.viewPosLoc, &camera.position,
+                 SHADER_UNIFORM_VEC3);
 };
 
-void UnloadScene(SceneAssets &);
+void UnloadScene(SceneAssets &scene) {
+
+  UnloadModel(scene.model);
+  UnloadShader(scene.shader);
+};
 
 int main() {
   int screenWidth{1280};
@@ -76,6 +86,10 @@ int main() {
   // Initialize Window
   InitWindow(screenWidth, screenHeight, "tac-flight-sim");
   SceneAssets scene = LoadScene();
+  if (!IsModelValid(scene.model) || !IsShaderValid(scene.shader)) {
+    CloseWindow();
+    return 1;
+  }
 
   // 3D Camera
 
@@ -95,6 +109,8 @@ int main() {
 
     if (IsKeyPressed(KEY_Z))
       camera.target = origin;
+
+    UpdateScene(scene, camera);
     BeginDrawing();
 
     ClearBackground(WHITE);
@@ -108,7 +124,7 @@ int main() {
     EndDrawing();
   }
 
-  UnloadModel(scene.model);
+  UnloadScene(scene);
   CloseWindow();
 
   return 0;
