@@ -59,6 +59,68 @@ made — see CLAUDE.md for phase/roadmap context and team-role workflow.
   draw calls (`DrawGrid`/`DrawCube`/`DrawModel`), not the mode bracket.
   Revisit if/when 2D/HUD content grows enough to justify its own ownership
   structure — not before.
+- **Lighting shader source — resolved on TICKET-004:** raylib's own
+  `lighting.vs`/`lighting.fs` example shader pair is used verbatim (loaded via
+  `LoadShader("assets/shaders/lighting.vs", "assets/shaders/lighting.fs")`),
+  not a hand-written-from-scratch shader. Resolves the open question raised
+  when the ticket was drafted.
+- **`rlights.h` warning suppression — resolved on TICKET-004:** the vendored
+  header (`src/rlights.h:123`, `Light light = { 0 };`) triggers
+  `-Wmissing-field-initializers` under this project's `-Wall -Wextra
+  -Wpedantic` flags since it's `#include`d directly into `main.cpp`. Fixed
+  with a localized `#pragma GCC diagnostic push` / `ignored
+  "-Wmissing-field-initializers"` / `pop` wrapped around just that include,
+  rather than marking the include path `SYSTEM` in CMake — the `SYSTEM` path
+  approach was discussed and deferred as more relevant once Phase 3 brings in
+  a real external physics-engine dependency via the same `FetchContent`
+  pattern.
+- **Background darkening — tried, explicitly not adopted, on TICKET-004:**
+  when the lit model looked underwhelming, the developer wanted the overall
+  scene darker with brightness concentrated near the light. pm ruled that
+  darkening `ClearBackground` alone was in-scope (a one-constant change
+  touching AC1's visual check), but making the grid/cube lighting-responsive
+  was scope creep (no `Material` on primitive `Draw*` calls; would reopen the
+  Scene/Renderer question) — parked for Phase 2+. The developer tried a black
+  `ClearBackground` as a test, then decided against scene-wide darkening and
+  reverted to `ClearBackground(WHITE)` to close the ticket. This was a
+  developer choice against a working option, not an abandonment due to
+  difficulty — noted here so it isn't re-litigated later as if it were never
+  tried.
+- **Aircraft entity structure — resolved on TICKET-005:** architect ruled
+  `main.cpp` stays flat, function-level split only, same pattern as
+  `SceneAssets`/`UpdateScene` — the aircraft entity (one small struct, one
+  input-reading update function, no resource-ordering hazards) introduces
+  strictly less complexity than TICKET-004's lighting work did, so it does
+  not clear the bar for a `Scene`/`Renderer` split or multiple files. This is
+  explicitly not a third parking of the flat-`main.cpp` question — architect
+  named the real next triggers to act on instead of re-parking indefinitely:
+  **Phase 3** (physics adds a genuinely separate axis of complexity —
+  velocity/forces/integration — with a different shape than rendering) and
+  **Phase 4** (HUD becomes a second consumer of `Aircraft` state, at which
+  point ownership of who may mutate it stops being obvious from proximity
+  alone). Either should trigger the split for real; "there's now a struct
+  with fields" should not.
+  Aircraft state is a **separate `Aircraft` struct**, not folded into
+  `SceneAssets` — `SceneAssets` is a GPU-handle bag with no semantic meaning
+  of its own, while `Aircraft.position`/`heading` mean something to the
+  simulation regardless of rendering (RADAR/guidance/HUD will all read it in
+  later phases). Forward rule set now to avoid relitigating later: once a
+  real aircraft `.glb` model loads, its `Model` handle belongs in the
+  GPU-handle bag, never in `Aircraft` — `Aircraft` stays pure domain state
+  indefinitely, never owning or reading rendering resources.
+  Keyboard input is read and applied via a dedicated `UpdateAircraft(Aircraft&)`
+  function, parallel to `UpdateScene`, not inlined in `main()` — multi-key
+  gameplay input mutating a domain object every frame is a distinct update
+  phase, unlike the existing one-line `KEY_Z` camera reset, which stays an
+  inline one-off. Loop order: `UpdateCamera` → `UpdateAircraft` →
+  `UpdateScene` → draw. `DrawScene`'s signature extends to also take
+  `const Aircraft&` rather than introducing a parallel `DrawAircraft`
+  function for one primitive shape.
+  Non-architectural implementation note carried over from the same review:
+  multiply movement deltas by `GetFrameTime()` in `UpdateAircraft` for
+  frame-rate-independent movement. How to orient a primitive by
+  heading/pitch in Raylib is flagged as a rendering-mentor question for
+  implementation time, not decided here.
 
 ## TICKET-001 — Bootstrap project + open a raylib window
 
@@ -263,7 +325,13 @@ conscious call later (keep as a future placeholder candidate, or delete).
 
 ## TICKET-004 — Basic lighting via shader on the loaded model
 
-**Status:** Open
+**Status:** Closed (verified — clean build from scratch produced zero
+warnings including confirmation the vendored `rlights.h`
+`-Wmissing-field-initializers` warnings are suppressed and the prior
+`Camera3D` `-Wextra` warning is gone; developer directly ran the app and
+confirmed the model is visibly lit and shading responds to camera movement,
+within ticket scope; Esc-key close confirmed working; clean resource
+teardown via `UnloadScene` covers both model and shader)
 
 **Phase:** 1 — Raylib fundamentals (**last ticket in this phase** — see Open
 questions for the Phase 2 planning flag)
@@ -369,5 +437,150 @@ become optional here the way it arguably was for TICKET-002/003 — this
 ticket has more moving parts (shader compilation, uniform wiring, material
 assignment order) and more silent-failure risk (per the architect's
 TICKET-003 white-model parallel) than either of those.
+
+**Review history:** pm's first static diagnostic pass and a follow-up
+rendering-mentor pass — working through the actual GLSL math against the
+real vendored raylib shader source, not just the C++ call sites — both
+independently confirmed the lighting shader math itself was correct when the
+developer initially found the lit model underwhelming. Root cause was scene
+geometry, not a bug: light and camera roughly opposite each other (camera-
+facing surfaces getting near-zero diffuse), a `YELLOW` light zeroing the blue
+channel, and no distance attenuation (by design, not an oversight, per
+ticket scope — this isn't a lighting-design exercise). Separately, pm's
+static read confirmed a real ordering bug fix: `model.materials[0].shader =
+shader` now runs only after the `shader.id == 0` validity check (previously
+ran before it, which would have assigned an invalid shader handle on load
+failure). The `LoadScene()` failure path was also fixed — it no longer calls
+`CloseWindow()` internally, so `main()` doesn't run the full loop against a
+closed window; `main()` now gates with `if (!IsModelValid(scene.model) ||
+!IsShaderValid(scene.shader)) { CloseWindow(); return 1; }` immediately after
+`LoadScene()` returns, before camera setup. `viewPos` is correctly resolved
+via `GetShaderLocation` in `LoadScene()` and pushed every frame in
+`UpdateScene` via `SetShaderValue`, and `UnloadScene` unloads both the model
+and the shader. A build-warning cleanup pass found 10
+`-Wmissing-field-initializers` warnings originating from vendored
+`src/rlights.h:123`, compiled under `main.cpp`'s strict flags since it's
+directly `#include`d — fixed with a localized `#pragma GCC diagnostic`
+push/ignore/pop around just that include (see Decisions log); a fresh
+rebuild confirmed zero warnings, and the previously-flagged `Camera3D`
+`-Wextra` "missing initializer" warning was reconfirmed gone. The developer
+then ran the app directly and confirmed the model is visibly shaded and
+shading responds to camera movement, closing out AC1. A scene-wide
+background-darkening idea was tried (black `ClearBackground`) and explicitly
+not adopted — see Decisions log — reverted to `ClearBackground(WHITE)`
+before closing. The ticket's open "exact shader source" question is resolved
+by use: raylib's own `lighting.vs`/`lighting.fs` example pair, loaded
+verbatim, not a from-scratch shader. Finally, Esc-key close was confirmed
+working directly by the developer (raylib's default `exitKey` behavior,
+unmodified by this project's code).
+
+## TICKET-005 — Aircraft entity: placeholder model + direct keyboard-driven movement
+
+**Status:** Draft — architect conversation resolved (see Decisions log and
+below), ready for implementation
+
+**Phase:** 2 — MVP loop
+
+**Goal:** Stand up the first owned, per-frame-updated aircraft entity — an
+object with its own position/orientation state that keyboard input changes
+every frame — replacing the throwaway cube and car placeholders. This is the
+entity TICKET-004's Decisions log flagged as the real trigger for revisiting
+whether `main.cpp` stays flat.
+
+**Scope — in:**
+- Remove the `RED` placeholder cube and the `race.glb` car model draw/load
+  calls — both were explicitly throwaway (the car was "chosen only to get
+  reps with model loading," never meant to represent the aircraft).
+- Introduce one aircraft placeholder — a primitive shape (e.g. an elongated
+  box/wedge) is sufficient; does not need to be a sourced aircraft model yet
+  (see open questions).
+- The aircraft has its own state — position and heading/orientation — that
+  is not hardcoded per frame but owned and mutated over time.
+- Direct keyboard input changes that state every frame: e.g. forward/back
+  translation and yaw/pitch rotation via WASD or arrow keys. This is
+  **kinematic, direct control** — set/adjust position and orientation
+  directly from input — not physics. No velocity, acceleration, mass,
+  forces, lift, drag, or thrust. That is explicitly Phase 3.
+- Ground grid may remain as a spatial reference for judging movement (open
+  question below on whether "empty sky" means removing it too).
+- Camera stays `CAMERA_FREE`, unchanged, this ticket. Camera-follow/chase-cam
+  is a separate design question (already flagged in TICKET-002 as something
+  to revisit "if an aircraft-follow camera design comes up") and belongs in
+  a follow-on ticket, not this one.
+- Joystick input is explicitly **not** in this ticket — see scope-out.
+
+**Scope — out:** Any flight physics (lift, drag, thrust, mass, forces,
+velocity/acceleration integration — all of Phase 3); altitude/speed limits,
+stall behavior, any flight-envelope concept; joystick/gamepad input (own
+follow-on ticket — needs its own input-mapping decision and hardware to
+verify, shouldn't block this ticket); camera-follow/chase-cam design (own
+architect-level decision, own ticket); HUD/instrumentation (Phase 4);
+collision, world bounds, terrain; multiple aircraft or any AI/UAV control
+(Phase 7); sourcing a polished aircraft model (a primitive placeholder is
+enough to prove the entity works — swapping in a real model later is a
+cheap, low-risk follow-up, not something to gate this ticket on).
+
+**Acceptance criteria:**
+- Running `./build/tac-flight-sim` shows one aircraft placeholder in the
+  scene; the old `RED` cube and `race.glb` car are gone.
+- The aircraft's position and orientation are held in state that persists
+  and is updated frame-to-frame, not recomputed from scratch or hardcoded.
+- Pressing movement keys visibly translates/rotates the aircraft placeholder
+  in real time, confirmed by observation (camera can be manually orbited via
+  `CAMERA_FREE` to watch it, since camera-follow isn't in scope).
+- No physics quantities exist anywhere in this code path — no
+  velocity/acceleration/force variables, no integration step. A static read
+  should be able to confirm this trivially.
+- Clean build, zero warnings; clean close (Esc/close button), no crash.
+- Whatever `main.cpp`-structure decision comes out of the required architect
+  conversation (stays flat one more time, splits into files, introduces a
+  `Scene`/`Renderer`-style split, etc.) is implemented, and the decision plus
+  reasoning is recorded in the Decisions log — same as every prior
+  structural call in this project.
+
+**Architect conversation — resolved, see Decisions log for full reasoning.**
+Summary: `main.cpp` stays flat, function-level split only (no
+`Scene`/`Renderer`, no new files) — this entity introduces less complexity
+than TICKET-004's lighting work did, so it doesn't clear that bar. Real next
+triggers to act on, not re-park: Phase 3 (physics adds a genuinely separate
+axis of complexity) or Phase 4 (HUD becomes a second consumer of `Aircraft`
+state). Aircraft state is a separate `Aircraft` struct (plain data, no
+methods), not folded into `SceneAssets` — `SceneAssets` stays a pure
+GPU-handle bag, `Aircraft` stays pure domain state, and this ownership line
+holds even after a real aircraft model is loaded (the `Model` handle goes in
+the GPU-handle bag, not `Aircraft`). Keyboard input is read/applied via a
+dedicated `UpdateAircraft(Aircraft&)` function parallel to `UpdateScene`,
+not inlined in `main()`. Loop order: `UpdateCamera` → `UpdateAircraft` →
+`UpdateScene` → draw. `DrawScene`'s signature extends to take
+`const Aircraft&` rather than a new `DrawAircraft` function.
+
+**Open questions (flagged by pm, not decided):**
+- **Placeholder representation:** primitive shape (fast, zero
+  asset-sourcing risk, keeps this ticket focused on entity/input) vs.
+  sourcing a new low-poly aircraft `.glb` vs. reusing the
+  already-present-but-unused `assets/models/race-future.glb` (flagged as
+  dead weight in TICKET-003's note, never loaded by any code, and it's a
+  car, not an aircraft — probably still not the right asset). pm recommends
+  the primitive for this ticket; a real model swap is cheap later and not
+  architecturally significant.
+- **"Empty sky" and the ground grid:** does Phase 2's "empty sky" language
+  mean the grid should also go (true empty sky, aircraft with only
+  sky/horizon as reference), or does it stay as a spatial anchor for judging
+  movement during development? pm recommends keeping it for now — removing
+  all spatial reference makes debugging movement harder for no real benefit
+  — but this is a legitimate call the developer or architect could
+  override.
+- Exact key mapping (WASD vs arrows, what maps to translate vs. rotate,
+  magnitude/step per frame) is an implementation-time call, not
+  architecturally significant.
+
+**Scope-creep watch:** any temptation to make "direct keyboard movement"
+feel more like flying — banking that affects turn rate, momentum/coasting
+when a key is released, speed-dependent turn radius — is 6DOF/flight-
+dynamics thinking creeping in early. Phase 3 exists specifically so that
+work gets done once, correctly, against real lift/drag/thrust, not
+half-built here as a stopgap. If the aircraft placeholder ends up feeling
+stiff and un-plane-like after this ticket, that's expected and correct, not
+a bug to fix now.
 
 **Review history:** (pending)
