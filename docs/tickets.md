@@ -121,6 +121,59 @@ made — see CLAUDE.md for phase/roadmap context and team-role workflow.
   frame-rate-independent movement. How to orient a primitive by
   heading/pitch in Raylib is flagged as a rendering-mentor question for
   implementation time, not decided here.
+- **Camera input handling — resolved on TICKET-005:** raylib's `CAMERA_FREE`
+  mode was found to hardcode its own keyboard bindings non-overridably inside
+  `UpdateCamera()` (confirmed against `rcamera.h`, lines 461-511) — W/A/S/D,
+  arrow keys, Q/E, Space/Ctrl — all colliding with `UpdateAircraft`'s input,
+  since both read raw keyboard state independently every frame (pressing `W`
+  moved both the aircraft and the free camera at once). Architect first
+  proposed dropping `UpdateCamera(&camera, CAMERA_FREE)` for a hand-rolled
+  observer-camera function, then withdrew that in favor of a cheaper fix after
+  the developer proposed it: gate the two calls with a single modifier key,
+  mutually exclusive — `if (IsKeyDown(KEY_LEFT_ALT)) UpdateCamera(&camera,
+  CAMERA_FREE); else UpdateAircraft(aircraft);` in place of the current
+  back-to-back calls. Reasoning for the reversal: TICKET-005's AC3 only
+  requires movement to be observable, not simultaneous with free-look, so
+  mutual exclusion satisfies it as cleanly as two concurrent systems; gating
+  the call (not individual keys) is necessary and sufficient since
+  `UpdateCamera`'s mouse-look/zoom run unconditionally whenever it's called at
+  all; and this reuses 100% of raylib's already-correct `CAMERA_FREE` math
+  instead of risking a first-pass bug hand-deriving `CameraYaw`/`CameraPitch`/
+  `CameraMoveToTarget` calls (degree/radian mismatches, `rotateAroundTarget`
+  sign conventions) in rendering, the project's flagged weaker area. A single
+  hardcoded `if`/`else` at the call site was judged categorically different
+  from the input-focus/mode system already ruled out elsewhere in this same
+  review (no new type, no persistent state, nothing to design wrong — a
+  branch to delete and replace wholesale when Phase 7 UAV control needs real
+  mode-switching, not something to extend or migrate). Also ruled out:
+  re-picking aircraft's keys (defers the problem to the next key added in a
+  later phase, since `CAMERA_FREE` claims nearly the entire conventional
+  keyset). Flagged explicitly as a stopgap for MVP-loop observation, not
+  permanent input design — a strong candidate for outright replacement (not
+  extension) when the camera-follow/chase-cam ticket happens (deferred since
+  TICKET-002) or Phase 4 HUD work gives the camera a more deliberate role.
+  This forced a scope-line amendment on TICKET-005 (original text said camera
+  stays unchanged) — logged as a bug fix forcing an amendment, not scope
+  creep, per pm review: TICKET-005's own AC3 already requires movement keys
+  to be verifiable by observation, which the collision broke. Does not reopen
+  the camera-follow/chase-cam question, which stays a separate future ticket
+  per TICKET-002. Q/E-for-yaw is safe to implement any time once the gate
+  lands — `UpdateAircraft` and `UpdateCamera` never execute in the same
+  frame, so there's no window where their Q/E readings collide.
+- **`UpdateScene`/`UnloadScene` removed — noted on TICKET-005:** both had
+  gone empty (no shader/lighting/model resources left to update or unload
+  once the car model and its lighting wiring were removed this ticket), and
+  their unused `SceneAssets`/`Camera3D` parameters were producing
+  `-Wunused-parameter` warnings under this project's `-Wextra`. Deleted
+  outright rather than kept as warning-suppressed no-ops. This narrows
+  TICKET-004's recorded loop shape (`UpdateCamera` → `UpdateAircraft` →
+  `UpdateScene` → draw) — `UpdateScene` no longer exists — and `LoadScene`
+  is the only member of that original four-function group still standing,
+  now returning an all-defaults `SceneAssets` with nothing to load. If a
+  real aircraft model/shader/lighting setup returns in a later ticket,
+  `UpdateScene`/`UnloadScene` (or equivalents) get reintroduced then, not
+  before — this isn't a standing rule against them existing, just against
+  keeping empty stubs around for a shape that has nothing left to do.
 
 ## TICKET-001 — Bootstrap project + open a raylib window
 
@@ -190,6 +243,9 @@ multiple objects/textures/materials.
 - Camera mode choice — resolved by shipping `CAMERA_FREE` (mouse-look
   fly-cam + WASD/space/ctrl, `DisableCursor()` paired correctly). Revisit if
   an aircraft-follow camera design comes up in Phase 2+ — architect call.
+  (`CAMERA_FREE` itself retained on TICKET-005 — gated behind a held modifier
+  key so its calls no longer collide with aircraft input, rather than being
+  replaced. See Decisions log.)
 - When flat `main.cpp` stops being appropriate as more tickets stack on top
   (model loading, then lighting) — a real architect question, likely to come
   up on the very next ticket.
@@ -476,8 +532,12 @@ unmodified by this project's code).
 
 ## TICKET-005 — Aircraft entity: placeholder model + direct keyboard-driven movement
 
-**Status:** Draft — architect conversation resolved (see Decisions log and
-below), ready for implementation
+**Status:** Closed (verified — clean build from scratch produced zero
+warnings after the last round of fixes; developer directly confirmed the
+Alt-gate behaves correctly, holding `KEY_LEFT_ALT` orbits the camera and
+releasing it resumes flying the aircraft; Esc-key close unaffected; a
+regression found during closure review — see Review history — was fixed and
+re-verified before closing)
 
 **Phase:** 2 — MVP loop
 
@@ -503,10 +563,17 @@ whether `main.cpp` stays flat.
   forces, lift, drag, or thrust. That is explicitly Phase 3.
 - Ground grid may remain as a spatial reference for judging movement (open
   question below on whether "empty sky" means removing it too).
-- Camera stays `CAMERA_FREE`, unchanged, this ticket. Camera-follow/chase-cam
-  is a separate design question (already flagged in TICKET-002 as something
-  to revisit "if an aircraft-follow camera design comes up") and belongs in
-  a follow-on ticket, not this one.
+- Camera stays `CAMERA_FREE`, but its call is now gated behind a held
+  modifier key (`KEY_LEFT_ALT`), mutually exclusive with `UpdateAircraft` —
+  `if (IsKeyDown(KEY_LEFT_ALT)) UpdateCamera(&camera, CAMERA_FREE); else
+  UpdateAircraft(aircraft);` in place of the previous back-to-back calls.
+  This is forced by a real key-collision bug — `CAMERA_FREE` hardcodes its
+  own non-overridable keyboard bindings inside raylib's function body, which
+  collide with every key `UpdateAircraft` reads — not a chase-cam/follow-cam
+  design change. The camera remains a free-roaming observer, unchanged in
+  behavior while active; only when it's active changes (held Alt, instead of
+  always). Camera-follow/chase-cam design stays out of scope, a separate
+  follow-on ticket, per TICKET-002. See Decisions log.
 - Joystick input is explicitly **not** in this ticket — see scope-out.
 
 **Scope — out:** Any flight physics (lift, drag, thrust, mass, forces,
@@ -527,7 +594,8 @@ cheap, low-risk follow-up, not something to gate this ticket on).
   and is updated frame-to-frame, not recomputed from scratch or hardcoded.
 - Pressing movement keys visibly translates/rotates the aircraft placeholder
   in real time, confirmed by observation (camera can be manually orbited via
-  `CAMERA_FREE` to watch it, since camera-follow isn't in scope).
+  `CAMERA_FREE` by holding `KEY_LEFT_ALT`, then released to resume flying the
+  aircraft, since camera-follow isn't in scope).
 - No physics quantities exist anywhere in this code path — no
   velocity/acceleration/force variables, no integration step. A static read
   should be able to confirm this trivially.
@@ -555,24 +623,29 @@ not inlined in `main()`. Loop order: `UpdateCamera` → `UpdateAircraft` →
 `const Aircraft&` rather than a new `DrawAircraft` function.
 
 **Open questions (flagged by pm, not decided):**
-- **Placeholder representation:** primitive shape (fast, zero
-  asset-sourcing risk, keeps this ticket focused on entity/input) vs.
-  sourcing a new low-poly aircraft `.glb` vs. reusing the
-  already-present-but-unused `assets/models/race-future.glb` (flagged as
-  dead weight in TICKET-003's note, never loaded by any code, and it's a
-  car, not an aircraft — probably still not the right asset). pm recommends
-  the primitive for this ticket; a real model swap is cheap later and not
-  architecturally significant.
-- **"Empty sky" and the ground grid:** does Phase 2's "empty sky" language
-  mean the grid should also go (true empty sky, aircraft with only
-  sky/horizon as reference), or does it stay as a spatial anchor for judging
-  movement during development? pm recommends keeping it for now — removing
-  all spatial reference makes debugging movement harder for no real benefit
-  — but this is a legitimate call the developer or architect could
-  override.
-- Exact key mapping (WASD vs arrows, what maps to translate vs. rotate,
-  magnitude/step per frame) is an implementation-time call, not
-  architecturally significant.
+- **Placeholder representation — resolved:** started as a `DrawCube`
+  fuselage plus two independent `DrawTriangle3D` wing panels (six separately
+  hardcoded `Vector3` fields on `Aircraft`), found during review to be more
+  than the ticket's own "a primitive shape is sufficient" text called for
+  and the direct source of a winding/backface-culling bug and a
+  position-desync risk once the aircraft could move. Replaced with a single
+  `DrawCube` + `DrawCubeWires` outline pair, both rotated/translated via one
+  `rlPushMatrix`/`rlRotatef`(yaw, pitch, roll)/`rlPopMatrix` bracket in
+  `DrawScene`, reading `aircraft.position`/`.yaw`/`.pitch`/`.roll` directly —
+  no separate wing geometry. `assets/models/race-future.glb` and its texture
+  were deleted from the repo rather than kept unused. A real model swap
+  remains cheap and out of scope, unchanged from the original call.
+- **"Empty sky" and the ground grid — resolved:** grid kept (`DrawGrid(100,
+  1.0f)`, widened from the original `25` for more visible travel room) as a
+  spatial reference, per pm's original recommendation.
+- **Exact key mapping — resolved:** `W`/`S` → `position.z`, `A`/`D` →
+  `position.x`, `SPACE`/`LEFT_CONTROL` → `position.y` (translation);
+  `UP`/`DOWN` → `pitch`, `LEFT`/`RIGHT` → `roll`, `Q`/`E` → `yaw`
+  (rotation) — all direct `+= rate * GetFrameTime()` state mutation in
+  `UpdateAircraft`, no rlgl/rendering calls in that function. `Q`/`E` for
+  yaw was an architect recommendation, confirmed safe only after the
+  Alt-gate landed (see Decisions log — raylib's `CAMERA_FREE` claims `Q`/`E`
+  for camera roll internally, which would otherwise have collided).
 
 **Scope-creep watch:** any temptation to make "direct keyboard movement"
 feel more like flying — banking that affects turn rate, momentum/coasting
@@ -583,4 +656,42 @@ half-built here as a stopgap. If the aircraft placeholder ends up feeling
 stiff and un-plane-like after this ticket, that's expected and correct, not
 a bug to fix now.
 
-**Review history:** (pending)
+**Review history:** Extensive rendering-mentor collaboration throughout
+implementation, not just after (per this project's standing workflow rule).
+Early passes diagnosed a `DrawTriangle3D` backface-culling/winding-order bug
+on the original wing-panel placeholder (traced to `rlgl`'s default CCW
+front-face convention and a missing `rlgl.h` include for
+`rlDisableBackfaceCulling`), then walked through raylib's `rlPushMatrix`/
+`rlTranslatef`/`rlRotatef`/`rlPopMatrix` matrix-stack pattern from scratch
+(referencing raylib's own `models_rlgl_solar_system.c` example) after an
+initial attempt put rotation logic in `UpdateAircraft` instead of
+`DrawScene`, mixing update/draw concerns; a second attempt had the
+`rlRotatef` angle/axis arguments swapped and the roll/yaw axis pairings
+reversed relative to this codebase's `position.z`-is-forward convention —
+both fixed and reconfirmed. Separately, a real bug was found mid-ticket:
+raylib's `CAMERA_FREE` mode hardcodes its own non-overridable keyboard
+bindings inside `UpdateCamera()`, colliding with every key `UpdateAircraft`
+reads. architect first proposed replacing `UpdateCamera(CAMERA_FREE)` with a
+hand-rolled observer-camera function, then withdrew that recommendation in
+favor of the developer's own cheaper counter-proposal — a single
+`KEY_LEFT_ALT`-gated mutual exclusion between the two update calls — after
+re-confirming it fully satisfies AC3 (observability, not simultaneity) at a
+fraction of the implementation risk. pm ruled the resulting scope-line
+amendment on this ticket a forced bug fix, not scope creep, and logged it.
+pm's closure review caught a real regression before this ticket closed: the
+original unconditional `UpdateAircraft(aircraft);` call had been left in
+place alongside the new `if`/`else` gate, silently reintroducing the exact
+collision the gate was built to remove (and, when the gate wasn't
+triggered, running aircraft input twice per frame). Fixed and reconfirmed —
+by hand for the Alt-gate behavior, and by an actual from-scratch rebuild,
+which caught 4 real `-Wunused-parameter` warnings (on `DrawScene`'s `scene`
+parameter and `UpdateScene`/`UnloadScene`'s now-dead parameters) that a
+static read alone had explicitly flagged as unable to catch. Warnings fixed
+(unnamed unused parameter on `DrawScene`; `UpdateScene`/`UnloadScene`
+deleted outright as dead no-op stubs — see Decisions log) and the rebuild
+reconfirmed clean. Final state: zero build warnings, all six acceptance
+criteria verified — four by direct code/build inspection, two (AC3's
+Alt-gate behavior, and general run/close behavior) by the developer's own
+hands-on check, consistent with this project's stated preference that
+interactive GUI verification stays with the developer rather than being
+automated.

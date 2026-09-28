@@ -26,7 +26,7 @@ A 3D flight/combat simulator built solo in C++ with Raylib: flight physics, RADA
 7. UAV / autonomous control — AI-controlled aircraft on the same flight model
 8. Polish and portfolio packaging — README, architecture diagram, demo video/GIF
 
-Current phase: **1 — Raylib fundamentals**
+Current phase: **2 — MVP loop**
 
 *(Update this line as phases complete — it's the fastest way for agents to know where things stand.)*
 
